@@ -3,19 +3,22 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { UserRole } from '@prisma/client';
+import { users_role } from '@prisma/client';
 
 const router = Router();
 
 const SubtopicSchema = z.object({
   name: z.string().min(1).max(100),
-  topicId: z.string().uuid()
+  topicId: z.string().uuid(),
+  description: z.string().optional(),
+  validFrom: z.date(),
+  validTo: z.date().optional()
 });
 
 // Get all subtopics
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const subtopics = await prisma.subtopic.findMany({
+    const subtopics = await prisma.subtopics.findMany({
       include: {
         questions: true
       }
@@ -29,8 +32,8 @@ router.get('/', authenticate, async (req, res, next) => {
 // Get subtopics by topic ID
 router.get('/topic/:topicId', authenticate, async (req, res, next) => {
   try {
-    const subtopics = await prisma.subtopic.findMany({
-      where: { topicId: req.params.topicId },
+    const subtopics = await prisma.subtopics.findMany({
+      where: { topic_id: req.params.topicId },
       include: {
         questions: true
       }
@@ -44,12 +47,19 @@ router.get('/topic/:topicId', authenticate, async (req, res, next) => {
 // Create subtopic
 router.post('/',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(SubtopicSchema),
   async (req, res, next) => {
     try {
-      const subtopic = await prisma.subtopic.create({
-        data: req.body,
+      const subtopic = await prisma.subtopics.create({
+        data: {
+          subtopic_id: req.body.id,
+          name: req.body.name,
+          description: req.body.description,
+          topic_id: req.body.topicId,
+          valid_from: req.body.validFrom,
+          valid_to: req.body.validTo
+        },
         include: {
           questions: true
         }
@@ -63,13 +73,19 @@ router.post('/',
 // Update subtopic
 router.put('/:id',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(SubtopicSchema),
   async (req, res, next) => {
     try {
-      const subtopic = await prisma.subtopic.update({
-        where: { id: req.params.id },
-        data: req.body,
+      const subtopic = await prisma.subtopics.update({
+        where: { subtopic_id: req.params.id },
+        data: {
+          name: req.body.name,
+          description: req.body.description,
+          topic_id: req.body.topicId,
+          valid_from: req.body.validFrom,
+          valid_to: req.body.validTo
+        },
         include: {
           questions: true
         }
@@ -83,11 +99,11 @@ router.put('/:id',
 // Delete subtopic
 router.delete('/:id',
   authenticate,
-  authorize([UserRole.ADMIN]),
+  authorize([users_role.Admin]),
   async (req, res, next) => {
     try {
-      await prisma.subtopic.delete({
-        where: { id: req.params.id }
+      await prisma.subtopics.delete({
+        where: { subtopic_id: req.params.id }
       });
       res.status(204).send();
     } catch (error) {

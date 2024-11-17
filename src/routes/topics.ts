@@ -3,19 +3,22 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { UserRole } from '@prisma/client';
+import { users_role } from '@prisma/client';
 
 const router = Router();
 
 const TopicSchema = z.object({
   name: z.string().min(1).max(100),
-  subjectId: z.string().uuid()
+  subjectId: z.string().uuid(),
+  description: z.string().optional(),
+  validFrom: z.date(),
+  validTo: z.date().optional()
 });
 
 // Get all topics with subtopics
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const topics = await prisma.topic.findMany({
+    const topics = await prisma.topics.findMany({
       include: {
         subtopics: true
       }
@@ -29,8 +32,8 @@ router.get('/', authenticate, async (req, res, next) => {
 // Get topics by subject ID
 router.get('/subject/:subjectId', authenticate, async (req, res, next) => {
   try {
-    const topics = await prisma.topic.findMany({
-      where: { subjectId: req.params.subjectId },
+    const topics = await prisma.topics.findMany({
+      where: { subject_id: req.params.subjectId },
       include: {
         subtopics: true
       }
@@ -44,12 +47,19 @@ router.get('/subject/:subjectId', authenticate, async (req, res, next) => {
 // Create topic
 router.post('/',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(TopicSchema),
   async (req, res, next) => {
     try {
-      const topic = await prisma.topic.create({
-        data: req.body,
+      const topic = await prisma.topics.create({
+        data: {
+          topic_id: req.body.id,
+          name: req.body.name,
+          description: req.body.description,
+          subject_id: req.body.subjectId,
+          valid_from: req.body.validFrom,
+          valid_to: req.body.validTo
+        },
         include: {
           subtopics: true
         }
@@ -63,13 +73,19 @@ router.post('/',
 // Update topic
 router.put('/:id',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(TopicSchema),
   async (req, res, next) => {
     try {
-      const topic = await prisma.topic.update({
-        where: { id: req.params.id },
-        data: req.body,
+      const topic = await prisma.topics.update({
+        where: { topic_id: req.params.id },
+        data: {
+          name: req.body.name,
+          description: req.body.description,
+          subject_id: req.body.subjectId,
+          valid_from: req.body.validFrom,
+          valid_to: req.body.validTo
+        },
         include: {
           subtopics: true
         }
@@ -83,11 +99,11 @@ router.put('/:id',
 // Delete topic
 router.delete('/:id',
   authenticate,
-  authorize([UserRole.ADMIN]),
+  authorize([users_role.Admin]),
   async (req, res, next) => {
     try {
-      await prisma.topic.delete({
-        where: { id: req.params.id }
+      await prisma.topics.delete({
+        where: { topic_id: req.params.id }
       });
       res.status(204).send();
     } catch (error) {

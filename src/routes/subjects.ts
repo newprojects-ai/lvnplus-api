@@ -3,7 +3,7 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { users_role} from '@prisma/client';
+import { users_role } from '@prisma/client';
 
 const router = Router();
 
@@ -33,8 +33,8 @@ router.get('/', authenticate, async (req, res, next) => {
 // Get subject by ID
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
-    const subject = await prisma.subject.findUnique({
-      where: { id: req.params.id },
+    const subject = await prisma.subjects.findUnique({
+      where: { subject_id: req.params.id },
       include: {
         topics: {
           include: {
@@ -57,12 +57,16 @@ router.get('/:id', authenticate, async (req, res, next) => {
 // Create subject (Admin/Tutor only)
 router.post('/', 
   authenticate, 
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(SubjectSchema),
   async (req, res, next) => {
     try {
-      const subject = await prisma.subject.create({
-        data: req.body,
+      const subject = await prisma.subjects.create({
+        data: {
+          subject_id: req.body.id,
+          name: req.body.name,
+          exam_id: req.body.examId
+        },
         include: {
           topics: true
         }
@@ -76,13 +80,16 @@ router.post('/',
 // Update subject
 router.put('/:id',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(SubjectSchema),
   async (req, res, next) => {
     try {
-      const subject = await prisma.subject.update({
-        where: { id: req.params.id },
-        data: req.body,
+      const subject = await prisma.subjects.update({
+        where: { subject_id: req.params.id },
+        data: {
+          name: req.body.name,
+          exam_id: req.body.examId
+        },
         include: {
           topics: true
         }
@@ -96,11 +103,11 @@ router.put('/:id',
 // Delete subject
 router.delete('/:id',
   authenticate,
-  authorize([UserRole.ADMIN]),
+  authorize([users_role.Admin]),
   async (req, res, next) => {
     try {
-      await prisma.subject.delete({
-        where: { id: req.params.id }
+      await prisma.subjects.delete({
+        where: { subject_id: req.params.id }
       });
       res.status(204).send();
     } catch (error) {

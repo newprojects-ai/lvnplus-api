@@ -3,7 +3,8 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { UserRole } from '@prisma/client';
+import { users_role, type questions, Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
@@ -12,7 +13,8 @@ const QuestionSchema = z.object({
   options: z.array(z.string()).min(2),
   correctAnswer: z.string(),
   subtopicId: z.string().uuid(),
-  difficultyId: z.number()
+  difficultyId: z.number(),
+  subjectId: z.string().uuid()
 });
 
 const PaginationSchema = z.object({
@@ -32,24 +34,24 @@ router.get('/random/practice', authenticate, async (req, res, next) => {
     const difficultyId = parseInt(req.query.difficultyId as string);
     const subtopicIds = (req.query.subtopicIds as string).split(',');
 
-    const questions = await prisma.question.findMany({
+    const questions = await prisma.questions.findMany({
       where: {
         AND: [
-          { difficultyId: difficultyId },
-          { subtopicId: { in: subtopicIds } }
+          { difficulty_id: difficultyId },
+          { subtopic_id: { in: subtopicIds } }
         ]
       },
       take: count,
       orderBy: {
-        createdAt: 'desc'
+        created_at: 'desc'
       }
     });
 
     // Shuffle the questions array
-    const shuffledQuestions = questions
-      .map(value => ({ value, sort: Math.random() }))
+    const shuffledQuestions = [...questions]
+      .map((q) => ({ q, sort: Math.random() }))
       .sort((a, b) => a.sort - b.sort)
-      .map(({ value }) => value);
+      .map(({ q }) => q);
 
     res.json(shuffledQuestions.slice(0, count));
   } catch (error) {
@@ -73,52 +75,49 @@ router.get('/', authenticate, async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     // Build where clause based on filters
-    const where: any = {};
+    const where: Prisma.questionsWhereInput = {};
 
     if (difficulty) {
-      where.difficultyId = parseInt(difficulty);
+      where.difficulty_id = parseInt(difficulty);
     }
 
     if (subtopicId) {
-      where.subtopicId = subtopicId;
+      where.subtopic_id = subtopicId;
     }
 
     if (topicId) {
-      where.subtopic = { topicId };
+      where.subtopics = { topic_id: topicId };
     }
 
     if (subjectId) {
-      where.subtopic = {
-        ...where.subtopic,
-        topic: { subjectId }
-      };
+      where.subject_id = subjectId;
     }
 
     if (search) {
-      where.questionText = { contains: search };
+      where.question_text = { contains: search };
     }
 
     // Get total count for pagination
-    const total = await prisma.question.count({ where });
+    const total = await prisma.questions.count({ where });
 
     // Get questions
-    const questions = await prisma.question.findMany({
+    const questions = await prisma.questions.findMany({
       where,
       include: {
-        subtopic: {
+        subtopics: {
           include: {
-            topic: {
+            topics: {
               include: {
-                subject: true
+                subjects: true
               }
             }
           }
         },
-        difficulty: true
+        difficulty_levels: true
       },
       skip,
       take: limit,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { created_at: 'desc' }
     });
 
     res.json({
@@ -138,19 +137,19 @@ router.get('/', authenticate, async (req, res, next) => {
 // Get question by ID
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
-    const question = await prisma.question.findUnique({
-      where: { id: req.params.id },
+    const question = await prisma.questions.findUnique({
+      where: { question_id: req.params.id },
       include: {
-        subtopic: {
+        subtopics: {
           include: {
-            topic: {
+            topics: {
               include: {
-                subject: true
+                subjects: true
               }
             }
           }
         },
-        difficulty: true
+        difficulty_levels: true
       }
     });
 
@@ -167,26 +166,37 @@ router.get('/:id', authenticate, async (req, res, next) => {
 // Create question
 router.post('/',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(QuestionSchema),
   async (req, res, next) => {
     try {
-      const question = await prisma.question.create({
+      const questionId = randomUUID();
+      const question = await prisma.questions.create({
         data: {
-          ...req.body,
-          options: JSON.stringify(req.body.options)
+          question_id: questionId,
+          question_text: req.body.questionText,
+          options: JSON.stringify(req.body.options),
+          correct_answer: req.body.correctAnswer,
+          subtopic_id: req.body.subtopicId,
+          difficulty_id: req.body.difficultyId,
+          subject_id: req.body.subjectId,
+          subjects: {
+            connect: {
+              subject_id: req.body.subjectId
+            }
+          }
         },
         include: {
-          subtopic: {
+          subtopics: {
             include: {
-              topic: {
+              topics: {
                 include: {
-                  subject: true
+                  subjects: true
                 }
               }
             }
           },
-          difficulty: true
+          difficulty_levels: true
         }
       });
       res.status(201).json(question);
@@ -198,27 +208,36 @@ router.post('/',
 // Update question
 router.put('/:id',
   authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
+  authorize([users_role.Admin, users_role.Tutor]),
   validateRequest(QuestionSchema),
   async (req, res, next) => {
     try {
-      const question = await prisma.question.update({
-        where: { id: req.params.id },
+      const question = await prisma.questions.update({
+        where: { question_id: req.params.id },
         data: {
-          ...req.body,
-          options: JSON.stringify(req.body.options)
+          question_text: req.body.questionText,
+          options: JSON.stringify(req.body.options),
+          correct_answer: req.body.correctAnswer,
+          subtopic_id: req.body.subtopicId,
+          difficulty_id: req.body.difficultyId,
+          subject_id: req.body.subjectId,
+          subjects: {
+            connect: {
+              subject_id: req.body.subjectId
+            }
+          }
         },
         include: {
-          subtopic: {
+          subtopics: {
             include: {
-              topic: {
+              topics: {
                 include: {
-                  subject: true
+                  subjects: true
                 }
               }
             }
           },
-          difficulty: true
+          difficulty_levels: true
         }
       });
       res.json(question);
@@ -230,11 +249,11 @@ router.put('/:id',
 // Delete question
 router.delete('/:id',
   authenticate,
-  authorize([UserRole.ADMIN]),
+  authorize([users_role.Admin]),
   async (req, res, next) => {
     try {
-      await prisma.question.delete({
-        where: { id: req.params.id }
+      await prisma.questions.delete({
+        where: { question_id: req.params.id }
       });
       res.status(204).send();
     } catch (error) {

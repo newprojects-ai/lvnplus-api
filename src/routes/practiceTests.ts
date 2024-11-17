@@ -3,9 +3,10 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { UserRole } from '@prisma/client';
+import { users_role, type questions, Prisma, practice_test_configurations_test_type } from '@prisma/client';
 import { AuthRequest } from '../types/auth';
 import { Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
@@ -23,9 +24,9 @@ router.get('/configurations',
   authenticate as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const configurations = await prisma.practiceTestConfiguration.findMany({
+      const configurations = await prisma.practice_test_configurations.findMany({
         include: {
-          generatedTests: true
+          generated_practice_tests: true
         }
       });
       res.json(configurations);
@@ -37,21 +38,46 @@ router.get('/configurations',
 // Create test configuration
 router.post('/configurations',
   authenticate as any,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]) as any,
+  authorize([users_role.Admin, users_role.Tutor]) as any,
   validateRequest(TestConfigurationSchema),
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const configuration = await prisma.practiceTestConfiguration.create({
+      const configuration = await prisma.practice_test_configurations.create({
         data: {
-          ...req.body,
-          topicIds: JSON.stringify(req.body.topicIds),
-          subtopicIds: JSON.stringify(req.body.subtopicIds),
-          difficultyLevels: JSON.stringify(req.body.difficultyLevels)
+          config_id: randomUUID(),
+          user_id: req.user!.id,
+          test_type: practice_test_configurations_test_type.Mixed,
+          is_timed: true,
+          duration_minutes: req.body.timeLimit,
+          question_count: req.body.questionCount
         },
         include: {
-          generatedTests: true
+          generated_practice_tests: true
         }
       });
+
+      // Create topic associations
+      await Promise.all(req.body.topicIds.map((topicId: string) =>
+        prisma.practice_test_topics.create({
+          data: {
+            config_id: configuration.config_id,
+            topic_id: topicId,
+            all_subtopics: true
+          }
+        })
+      ));
+
+      // Create subtopic associations
+      await Promise.all(req.body.subtopicIds.map((subtopicId: string) =>
+        prisma.practice_test_subtopics.create({
+          data: {
+            config_id: configuration.config_id,
+            topic_id: req.body.topicIds[0], // Associate with first topic
+            subtopic_id: subtopicId
+          }
+        })
+      ));
+
       res.status(201).json(configuration);
     } catch (error) {
       next(error);
@@ -63,45 +89,59 @@ router.post('/generate/:configId',
   authenticate as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const config = await prisma.practiceTestConfiguration.findUnique({
-        where: { id: req.params.configId }
+      const config = await prisma.practice_test_configurations.findUnique({
+        where: { config_id: req.params.configId },
+        include: {
+          practice_test_subtopics: true,
+          practice_test_topics: true
+        }
       });
 
       if (!config) {
         return res.status(404).json({ error: 'Configuration not found' });
       }
 
-      const subtopicIds = JSON.parse(config.subtopicIds as string);
-      const difficultyLevels = JSON.parse(config.difficultyLevels as string);
+      const subtopicIds = config.practice_test_subtopics.map(pts => pts.subtopic_id);
 
       // Get random questions based on configuration
-      const questions = await prisma.question.findMany({
+      const questions = await prisma.questions.findMany({
         where: {
-          AND: [
-            { subtopicId: { in: subtopicIds } },
-            { difficulty: { level: { in: difficultyLevels } } }
-          ]
+          subtopic_id: { in: subtopicIds }
         },
-        take: config.questionCount,
-        orderBy: { createdAt: 'desc' }
+        take: config.question_count || 10,
+        orderBy: { created_at: 'desc' }
       });
 
-      if (questions.length < config.questionCount) {
+      if (questions.length < (config.question_count || 10)) {
         return res.status(400).json({
           error: 'Not enough questions available for the requested configuration'
         });
       }
 
       // Create generated test
-      const generatedTest = await prisma.generatedPracticeTest.create({
+      const generatedTest = await prisma.generated_practice_tests.create({
         data: {
-          configurationId: config.id,
-          questions: JSON.stringify(questions.map(q => q.id))
+          generated_test_id: randomUUID(),
+          config_id: config.config_id,
+          user_id: req.user!.id,
+          exam_id: null
         },
         include: {
-          configuration: true
+          practice_test_configurations: true
         }
       });
+
+      // Create practice test questions
+      await Promise.all(questions.map((q, index) => 
+        prisma.practice_test_questions.create({
+          data: {
+            test_question_id: randomUUID(),
+            generated_test_id: generatedTest.generated_test_id,
+            question_id: q.question_id,
+            sequence_number: index + 1
+          }
+        })
+      ));
 
       res.status(201).json({
         ...generatedTest,
@@ -117,10 +157,15 @@ router.get('/test/:testId',
   authenticate as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const test = await prisma.generatedPracticeTest.findUnique({
-        where: { id: req.params.testId },
+      const test = await prisma.generated_practice_tests.findUnique({
+        where: { generated_test_id: req.params.testId },
         include: {
-          configuration: true
+          practice_test_configurations: true,
+          practice_test_questions: {
+            include: {
+              questions: true
+            }
+          }
         }
       });
 
@@ -128,10 +173,7 @@ router.get('/test/:testId',
         return res.status(404).json({ error: 'Test not found' });
       }
 
-      const questionIds = JSON.parse(test.questions as string);
-      const questions = await prisma.question.findMany({
-        where: { id: { in: questionIds } }
-      });
+      const questions = test.practice_test_questions.map(ptq => ptq.questions);
 
       res.json({
         ...test,
@@ -152,10 +194,15 @@ router.post('/test/:testId/submit',
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { answers, timeSpent } = req.body;
-      const test = await prisma.generatedPracticeTest.findUnique({
-        where: { id: req.params.testId },
+      const test = await prisma.generated_practice_tests.findUnique({
+        where: { generated_test_id: req.params.testId },
         include: {
-          configuration: true
+          practice_test_configurations: true,
+          practice_test_questions: {
+            include: {
+              questions: true
+            }
+          }
         }
       });
 
@@ -163,40 +210,26 @@ router.post('/test/:testId/submit',
         return res.status(404).json({ error: 'Test not found' });
       }
 
-      const questionIds = JSON.parse(test.questions as string);
-      const questions = await prisma.question.findMany({
-        where: { id: { in: questionIds } }
-      });
+      const questions = test.practice_test_questions.map(ptq => ptq.questions);
 
       // Calculate score
       let score = 0;
-      questions.forEach(question => {
-        if (answers[question.id] === question.correctAnswer) {
+      questions.forEach((question: questions | null) => {
+        if (question && answers[question.question_id] === question.correct_answer) {
           score++;
         }
       });
 
-      // Create attempt record
-      const attempt = await prisma.practiceTestAttempt.create({
-        data: {
-          userId: req.user!.id,
-          testId: test.id,
-          answers: JSON.stringify(answers),
-          score,
-          timeSpent,
-          completedAt: new Date()
-        },
-        include: {
-          user: true,
-          test: {
-            include: {
-              configuration: true
-            }
-          }
-        }
-      });
+      // Record the attempt in your application's storage
+      // Since there's no practice_test_attempts table in the schema,
+      // you might want to store this data elsewhere or create a new table
 
-      res.status(201).json(attempt);
+      res.status(201).json({
+        testId: test.generated_test_id,
+        score,
+        timeSpent,
+        totalQuestions: questions.length
+      });
     } catch (error) {
       next(error);
     }
@@ -207,19 +240,20 @@ router.get('/attempts',
   authenticate as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const attempts = await prisma.practiceTestAttempt.findMany({
-        where: { userId: req.user!.id },
+      const tests = await prisma.generated_practice_tests.findMany({
+        where: { user_id: req.user!.id },
         include: {
-          test: {
+          practice_test_configurations: true,
+          practice_test_questions: {
             include: {
-              configuration: true
+              questions: true
             }
           }
         },
-        orderBy: { completedAt: 'desc' }
+        orderBy: { created_at: 'desc' }
       });
 
-      res.json(attempts);
+      res.json(tests);
     } catch (error) {
       next(error);
     }

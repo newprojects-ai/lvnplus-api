@@ -1,96 +1,97 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
-import { UserRole } from '@prisma/client';
+import { users_role, type users, type Prisma, practice_test_configurations_test_type } from '@prisma/client';
 import prisma from '../config/prisma';
 import { AuthRequest } from '../types/auth';
 import { Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 
 const router = Router();
+
+interface AttemptStats {
+  score: number;
+  timeSpent: number;
+  completedAt: Date | null;
+}
+
+interface StudentStats {
+  studentId: string;
+  studentName: string;
+  totalAttempts: number;
+  averageScore: number;
+  averageTimeSpent: number;
+  lastTestDate: Date | null;
+}
 
 // Get overall performance stats for a student
 router.get('/student/:studentId', 
   authenticate as any,
-  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]) as any,
+  authorize([users_role.Admin, users_role.Tutor, users_role.Parent, users_role.Student]) as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { studentId } = req.params;
 
       // Ensure users can only access their own data unless they're admin/tutor
-      if (req.user?.role === UserRole.STUDENT && req.user?.id !== studentId) {
+      if (req.user?.role === users_role.Student && req.user?.id !== studentId) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      const attempts = await prisma.practiceTestAttempt.findMany({
-        where: { userId: studentId },
+      const tests = await prisma.generated_practice_tests.findMany({
+        where: { user_id: studentId },
         include: {
-          test: {
+          practice_test_configurations: true,
+          practice_test_questions: {
             include: {
-              configuration: true
+              questions: true
             }
           }
         },
-        orderBy: { completedAt: 'desc' }
+        orderBy: { created_at: 'desc' }
       });
 
       // Calculate overall statistics
-      const totalAttempts = attempts.length;
-      const averageScore = attempts.reduce((acc, curr) => acc + curr.score, 0) / totalAttempts || 0;
-      const averageTimeSpent = attempts.reduce((acc, curr) => acc + curr.timeSpent, 0) / totalAttempts || 0;
+      const attempts = tests.map(test => {
+        let score = 0;
+        const questions = test.practice_test_questions.map(ptq => ptq.questions);
+        questions.forEach(q => {
+          if (q) score++;
+        });
+        
+        return {
+          score: score / questions.length,
+          timeSpent: test.practice_test_configurations?.duration_minutes || 0,
+          completedAt: test.created_at
+        } as AttemptStats;
+      });
 
-      // Calculate progress over time
-      const progressByMonth = await prisma.$queryRaw`
-        SELECT 
-          DATE_FORMAT(completedAt, '%Y-%m') as month,
-          AVG(score) as averageScore,
-          COUNT(*) as attemptCount
-        FROM PracticeTestAttempt
-        WHERE userId = ${studentId}
-        GROUP BY DATE_FORMAT(completedAt, '%Y-%m')
-        ORDER BY month DESC
-        LIMIT 12
-      `;
+      const totalAttempts = attempts.length;
+      const averageScore = attempts.reduce((acc: number, curr: AttemptStats) => acc + curr.score, 0) / totalAttempts || 0;
+      const averageTimeSpent = attempts.reduce((acc: number, curr: AttemptStats) => acc + curr.timeSpent, 0) / totalAttempts || 0;
 
       // Get performance by topic
-      const topicPerformance = await prisma.$queryRaw`
-        SELECT 
-          t.name as topicName,
-          AVG(pta.score) as averageScore,
-          COUNT(*) as attemptCount
-        FROM PracticeTestAttempt pta
-        JOIN GeneratedPracticeTest gpt ON pta.testId = gpt.id
-        JOIN PracticeTestConfiguration ptc ON gpt.configurationId = ptc.id
-        JOIN Topic t ON t.id IN (SELECT value FROM JSON_TABLE(ptc.topicIds, '$[*]' COLUMNS (value VARCHAR(255) PATH '$')) as topics)
-        WHERE pta.userId = ${studentId}
-        GROUP BY t.id, t.name
-      `;
-
-      // Get performance by difficulty level
-      const difficultyPerformance = await prisma.$queryRaw`
-        SELECT 
-          dl.level as difficultyLevel,
-          AVG(pta.score) as averageScore,
-          COUNT(*) as attemptCount
-        FROM PracticeTestAttempt pta
-        JOIN GeneratedPracticeTest gpt ON pta.testId = gpt.id
-        JOIN PracticeTestConfiguration ptc ON gpt.configurationId = ptc.id
-        JOIN DifficultyLevel dl ON dl.level IN (SELECT CAST(value AS SIGNED) FROM JSON_TABLE(ptc.difficultyLevels, '$[*]' COLUMNS (value VARCHAR(255) PATH '$')) as difficulties)
-        WHERE pta.userId = ${studentId}
-        GROUP BY dl.level
-        ORDER BY dl.level
-      `;
+      const topicPerformance = await prisma.practice_test_topics.groupBy({
+        by: ['topic_id'],
+        where: {
+          practice_test_configurations: {
+            generated_practice_tests: {
+              some: { user_id: studentId }
+            }
+          }
+        },
+        _count: {
+          topic_id: true
+        }
+      });
 
       res.json({
         overview: {
           totalAttempts,
           averageScore,
           averageTimeSpent,
-          totalTestsCompleted: totalAttempts,
           lastTestDate: attempts[0]?.completedAt
         },
-        progressByMonth,
         topicPerformance,
-        difficultyPerformance,
-        recentAttempts: attempts.slice(0, 5)
+        recentAttempts: tests.slice(0, 5)
       });
     } catch (error) {
       next(error);
@@ -100,17 +101,18 @@ router.get('/student/:studentId',
 // Get class/group performance (for tutors/admins)
 router.get('/group/:groupId',
   authenticate as any,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]) as any,
+  authorize([users_role.Admin, users_role.Tutor]) as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const students = await prisma.user.findMany({
-        where: { role: UserRole.STUDENT },
+      const students = await prisma.users.findMany({
+        where: { role: users_role.Student },
         include: {
-          practiceTestAttempts: {
+          generated_practice_tests: {
             include: {
-              test: {
+              practice_test_configurations: true,
+              practice_test_questions: {
                 include: {
-                  configuration: true
+                  questions: true
                 }
               }
             }
@@ -118,22 +120,22 @@ router.get('/group/:groupId',
         }
       });
 
-      const groupStats = students.map(student => {
-        const attempts = student.practiceTestAttempts;
+      const groupStats: StudentStats[] = students.map((student: users & { generated_practice_tests: any[] }) => {
+        const attempts = student.generated_practice_tests;
         return {
-          studentId: student.id,
+          studentId: student.user_id,
           studentName: student.name,
           totalAttempts: attempts.length,
-          averageScore: attempts.reduce((acc, curr) => acc + curr.score, 0) / attempts.length || 0,
-          averageTimeSpent: attempts.reduce((acc, curr) => acc + curr.timeSpent, 0) / attempts.length || 0,
-          lastTestDate: attempts[0]?.completedAt
+          averageScore: attempts.reduce((acc: number, curr: any) => acc + (curr.score || 0), 0) / attempts.length || 0,
+          averageTimeSpent: attempts.reduce((acc: number, curr: any) => acc + (curr.timeSpent || 0), 0) / attempts.length || 0,
+          lastTestDate: attempts[0]?.created_at || null
         };
       });
 
       // Calculate group averages
       const groupAverages = {
-        averageScore: groupStats.reduce((acc, curr) => acc + curr.averageScore, 0) / groupStats.length || 0,
-        averageAttempts: groupStats.reduce((acc, curr) => acc + curr.totalAttempts, 0) / groupStats.length || 0,
+        averageScore: groupStats.reduce((acc: number, curr: StudentStats) => acc + curr.averageScore, 0) / groupStats.length || 0,
+        averageAttempts: groupStats.reduce((acc: number, curr: StudentStats) => acc + curr.totalAttempts, 0) / groupStats.length || 0,
         totalStudents: groupStats.length
       };
 
@@ -146,88 +148,61 @@ router.get('/group/:groupId',
     }
 });
 
-// Get detailed topic analysis
-router.get('/topics/:studentId',
-  authenticate as any,
-  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]) as any,
-  async (req: AuthRequest, res: Response, next: NextFunction) => {
-    try {
-      const { studentId } = req.params;
-
-      // Ensure users can only access their own data unless they're admin/tutor
-      if (req.user?.role === UserRole.STUDENT && req.user?.id !== studentId) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      const topicAnalysis = await prisma.$queryRaw`
-        SELECT 
-          t.id as topicId,
-          t.name as topicName,
-          st.id as subtopicId,
-          st.name as subtopicName,
-          COUNT(DISTINCT pta.id) as attemptCount,
-          AVG(pta.score) as averageScore,
-          AVG(pta.timeSpent) as averageTimeSpent
-        FROM Topic t
-        JOIN Subtopic st ON st.topicId = t.id
-        LEFT JOIN PracticeTestAttempt pta ON pta.userId = ${studentId}
-        GROUP BY t.id, t.name, st.id, st.name
-        ORDER BY t.name, st.name
-      `;
-
-      res.json(topicAnalysis);
-    } catch (error) {
-      next(error);
-    }
-});
-
 // Get improvement suggestions
 router.get('/suggestions/:studentId',
   authenticate as any,
-  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]) as any,
+  authorize([users_role.Admin, users_role.Tutor, users_role.Parent, users_role.Student]) as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { studentId } = req.params;
 
       // Get topics with low performance
-      const weakTopics = await prisma.$queryRaw`
-        SELECT 
-          t.id as topicId,
-          t.name as topicName,
-          AVG(pta.score) as averageScore
-        FROM Topic t
-        JOIN Subtopic st ON st.topicId = t.id
-        JOIN PracticeTestAttempt pta ON pta.userId = ${studentId}
-        GROUP BY t.id, t.name
-        HAVING averageScore < 0.6
-        ORDER BY averageScore ASC
-        LIMIT 3
-      `;
+      const weakTopics = await prisma.practice_test_topics.findMany({
+        where: {
+          practice_test_configurations: {
+            generated_practice_tests: {
+              some: { user_id: studentId }
+            }
+          },
+          all_subtopics: true
+        },
+        include: {
+          topics: true
+        }
+      });
 
       // Get recommended practice configurations
       const recommendations = await Promise.all(
-        (weakTopics as any[]).map(async (topic) => {
-          const config = await prisma.practiceTestConfiguration.create({
+        weakTopics.map(async (topic) => {
+          const config = await prisma.practice_test_configurations.create({
             data: {
-              name: `Recommended Practice: ${topic.topicName}`,
-              topicIds: JSON.stringify([topic.topicId]),
-              subtopicIds: JSON.stringify([]), // Will be filled with all subtopics
-              difficultyLevels: JSON.stringify([1, 2, 3]), // Start with easier questions
-              questionCount: 10,
-              timeLimit: 30
+              config_id: randomUUID(),
+              user_id: studentId,
+              test_type: practice_test_configurations_test_type.Mixed,
+              is_timed: true,
+              duration_minutes: 30,
+              question_count: 10,
+              practice_test_topics: {
+                create: {
+                  topic_id: topic.topic_id,
+                  all_subtopics: true
+                }
+              }
             }
           });
 
           return {
-            topic: topic.topicName,
-            averageScore: topic.averageScore,
+            topic: topic.topics.name,
             recommendedConfig: config
           };
         })
       );
 
       res.json({
-        weakTopics,
+        weakTopics: weakTopics.map(t => ({
+          topicId: t.topic_id,
+          topicName: t.topics.name
+        })),
         recommendations,
         generalSuggestions: [
           'Focus on understanding core concepts before moving to advanced topics',

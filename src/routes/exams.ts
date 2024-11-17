@@ -1,9 +1,11 @@
-import { Router } from 'express';
+import { Response, NextFunction } from 'express';
 import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
 import { UserRole } from '@prisma/client';
+import { AuthRequest } from '../types/auth';
+import { Router } from 'express';
 
 const router = Router();
 
@@ -13,33 +15,35 @@ const ExamSchema = z.object({
 });
 
 // Get all exams
-router.get('/', authenticate, async (req, res, next) => {
-  try {
-    const exams = await prisma.exam.findMany({
-      include: {
-        subjects: {
-          include: {
-            topics: {
-              include: {
-                subtopics: true
+router.get('/', 
+  authenticate as any,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const exams = await prisma.exam.findMany({
+        include: {
+          subjects: {
+            include: {
+              topics: {
+                include: {
+                  subtopics: true
+                }
               }
             }
           }
         }
-      }
-    });
-    res.json(exams);
-  } catch (error) {
-    next(error);
-  }
+      });
+      res.json(exams);
+    } catch (error) {
+      next(error);
+    }
 });
 
 // Create exam (Admin only)
 router.post('/', 
-  authenticate, 
-  authorize([UserRole.ADMIN]), 
-  validateRequest(ExamSchema), 
-  async (req, res, next) => {
+  authenticate as any,
+  authorize([UserRole.ADMIN]) as any,
+  validateRequest(ExamSchema),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const exam = await prisma.exam.create({
         data: req.body,

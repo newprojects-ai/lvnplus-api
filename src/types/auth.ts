@@ -1,3 +1,4 @@
+import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 
 export interface AuthRequest extends Request {
@@ -17,4 +18,5 @@ export interface RegisterDTO {
   email: string;
   password: string;
   role: UserRole;
+  parentId?: string;
 }

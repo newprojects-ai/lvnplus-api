@@ -12,7 +12,7 @@ const QuestionSchema = z.object({
   options: z.array(z.string()).min(2),
   correctAnswer: z.string(),
   subtopicId: z.string().uuid(),
-  difficultyId: z.string().uuid()
+  difficultyId: z.number()
 });
 
 const PaginationSchema = z.object({
@@ -23,6 +23,38 @@ const PaginationSchema = z.object({
   topicId: z.string().optional(),
   subjectId: z.string().optional(),
   search: z.string().optional()
+});
+
+// Get random questions for practice tests
+router.get('/random/practice', authenticate, async (req, res, next) => {
+  try {
+    const count = parseInt(req.query.count as string) || 10;
+    const difficultyId = parseInt(req.query.difficultyId as string);
+    const subtopicIds = (req.query.subtopicIds as string).split(',');
+
+    const questions = await prisma.question.findMany({
+      where: {
+        AND: [
+          { difficultyId: difficultyId },
+          { subtopicId: { in: subtopicIds } }
+        ]
+      },
+      take: count,
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Shuffle the questions array
+    const shuffledQuestions = questions
+      .map(value => ({ value, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ value }) => value);
+
+    res.json(shuffledQuestions.slice(0, count));
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Get questions with pagination and filters
@@ -44,7 +76,7 @@ router.get('/', authenticate, async (req, res, next) => {
     const where: any = {};
 
     if (difficulty) {
-      where.difficulty = { id: difficulty };
+      where.difficultyId = parseInt(difficulty);
     }
 
     if (subtopicId) {
@@ -208,27 +240,6 @@ router.delete('/:id',
     } catch (error) {
       next(error);
     }
-});
-
-// Get random questions for practice tests
-router.get('/random/practice', authenticate, async (req, res, next) => {
-  try {
-    const count = parseInt(req.query.count as string) || 10;
-    const difficultyId = req.query.difficultyId as string;
-    const subtopicIds = (req.query.subtopicIds as string).split(',');
-
-    const questions = await prisma.$queryRaw`
-      SELECT * FROM Question
-      WHERE difficultyId = ${difficultyId}
-      AND subtopicId IN (${Prisma.join(subtopicIds)})
-      ORDER BY RAND()
-      LIMIT ${count}
-    `;
-
-    res.json(questions);
-  } catch (error) {
-    next(error);
-  }
 });
 
 export { router as questionsRouter };

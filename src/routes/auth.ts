@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma';
 import { UserRole } from '@prisma/client';
 
-const router = Router();
+export const authRouter = Router();
 
 const RegisterSchema = z.object({
   name: z.string().min(2).max(100),
@@ -20,7 +20,7 @@ const LoginSchema = z.object({
   password: z.string()
 });
 
-router.post('/register', validateRequest(RegisterSchema), async (req, res, next) => {
+authRouter.post('/register', validateRequest(RegisterSchema), async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
     
@@ -58,7 +58,7 @@ router.post('/register', validateRequest(RegisterSchema), async (req, res, next)
   }
 });
 
-router.post('/login', validateRequest(LoginSchema), async (req, res, next) => {
+authRouter.post('/login', validateRequest(LoginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body;
     
@@ -91,5 +91,3 @@ router.post('/login', validateRequest(LoginSchema), async (req, res, next) => {
     next(error);
   }
 });
-
-export { router };

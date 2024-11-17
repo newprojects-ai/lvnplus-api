@@ -2,19 +2,21 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
 import { UserRole } from '@prisma/client';
 import prisma from '../config/prisma';
+import { AuthRequest } from '../types/auth';
+import { Response, NextFunction } from 'express';
 
 const router = Router();
 
 // Get overall performance stats for a student
 router.get('/student/:studentId', 
-  authenticate, 
-  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]),
-  async (req, res, next) => {
+  authenticate as any,
+  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]) as any,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { studentId } = req.params;
 
       // Ensure users can only access their own data unless they're admin/tutor
-      if (req.user!.role === UserRole.STUDENT && req.user!.id !== studentId) {
+      if (req.user?.role === UserRole.STUDENT && req.user?.id !== studentId) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -97,9 +99,9 @@ router.get('/student/:studentId',
 
 // Get class/group performance (for tutors/admins)
 router.get('/group/:groupId',
-  authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR]),
-  async (req, res, next) => {
+  authenticate as any,
+  authorize([UserRole.ADMIN, UserRole.TUTOR]) as any,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const students = await prisma.user.findMany({
         where: { role: UserRole.STUDENT },
@@ -146,14 +148,14 @@ router.get('/group/:groupId',
 
 // Get detailed topic analysis
 router.get('/topics/:studentId',
-  authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]),
-  async (req, res, next) => {
+  authenticate as any,
+  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]) as any,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { studentId } = req.params;
 
       // Ensure users can only access their own data unless they're admin/tutor
-      if (req.user!.role === UserRole.STUDENT && req.user!.id !== studentId) {
+      if (req.user?.role === UserRole.STUDENT && req.user?.id !== studentId) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -181,9 +183,9 @@ router.get('/topics/:studentId',
 
 // Get improvement suggestions
 router.get('/suggestions/:studentId',
-  authenticate,
-  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]),
-  async (req, res, next) => {
+  authenticate as any,
+  authorize([UserRole.ADMIN, UserRole.TUTOR, UserRole.PARENT, UserRole.STUDENT]) as any,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { studentId } = req.params;
 

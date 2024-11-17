@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthRequest } from '../types/auth';
-import { UserRole } from '@prisma/client';
+import { users_role} from '@prisma/client';
 
 export const authenticate = (
   req: AuthRequest,
@@ -17,7 +17,7 @@ export const authenticate = (
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
       id: string;
-      role: UserRole;
+      role: users_role;
     };
     
     req.user = decoded;
@@ -27,7 +27,7 @@ export const authenticate = (
   }
 };
 
-export const authorize = (roles: UserRole[]) => {
+export const authorize = (roles: users_role[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Insufficient permissions' });

@@ -3,7 +3,7 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { UserRole } from '@prisma/client';
+import { users_role} from '@prisma/client';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ const SubjectSchema = z.object({
 // Get all subjects with topics and subtopics
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const subjects = await prisma.subject.findMany({
+    const subjects = await prisma.subjects.findMany({
       include: {
         topics: {
           include: {

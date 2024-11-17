@@ -3,7 +3,7 @@ import { validateRequest } from '../middleware/validateRequest';
 import { authenticate, authorize } from '../middleware/auth';
 import { z } from 'zod';
 import prisma from '../config/prisma';
-import { UserRole } from '@prisma/client';
+import { users_role as UserRole} from '@prisma/client';
 import { AuthRequest } from '../types/auth';
 import { Router } from 'express';
 
@@ -19,7 +19,7 @@ router.get('/',
   authenticate as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const exams = await prisma.exam.findMany({
+      const exams = await prisma.exams.findMany({
         include: {
           subjects: {
             include: {
@@ -41,17 +41,17 @@ router.get('/',
 // Create exam (Admin only)
 router.post('/', 
   authenticate as any,
-  authorize([UserRole.ADMIN]) as any,
+  authorize([UserRole.Admin]) as any,
   validateRequest(ExamSchema),
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const exam = await prisma.exam.create({
+      const exams = await prisma.exams.create({
         data: req.body,
         include: {
           subjects: true
         }
       });
-      res.status(201).json(exam);
+      res.status(201).json(exams);
     } catch (error) {
       next(error);
     }

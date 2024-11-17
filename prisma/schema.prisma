@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(uuid())
+  name                  String
+  email                 String                 @unique
+  password              String
+  role                  UserRole
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  practiceTestAttempts  PracticeTestAttempt[]
+}
+
+model Exam {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  subjects    Subject[]
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String
+  examId      String
+  exam        Exam     @relation(fields: [examId], references: [id])
+  topics      Topic[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Topic {
+  id          String     @id @default(uuid())
+  name        String
+  subjectId   String
+  subject     Subject    @relation(fields: [subjectId], references: [id])
+  subtopics   Subtopic[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Subtopic {
+  id          String   @id @default(uuid())
+  name        String
+  topicId     String
+  topic       Topic    @relation(fields: [topicId], references: [id])
+  questions   Question[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DifficultyLevel {
+  id          String     @id @default(uuid())
+  level       Int        @unique
+  description String
+  questions   Question[]
+}
+
+model Question {
+  id                String          @id @default(uuid())
+  questionText      String         @db.Text
+  options          Json
+  correctAnswer    String
+  subtopicId       String
+  subtopic         Subtopic        @relation(fields: [subtopicId], references: [id])
+  difficultyId     String
+  difficulty       DifficultyLevel @relation(fields: [difficultyId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model PracticeTestConfiguration {
+  id                    String                    @id @default(uuid())
+  name                  String
+  topicIds             Json                      // Array of topic IDs
+  subtopicIds          Json                      // Array of subtopic IDs
+  difficultyLevels     Json                      // Array of difficulty levels
+  questionCount        Int
+  timeLimit            Int                       // in minutes
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  generatedTests       GeneratedPracticeTest[]
+}
+
+model GeneratedPracticeTest {
+  id                        String                    @id @default(uuid())
+  configurationId          String
+  configuration           PracticeTestConfiguration  @relation(fields: [configurationId], references: [id])
+  questions               Json                       // Array of question IDs
+  attempts                PracticeTestAttempt[]
+  createdAt               DateTime                   @default(now())
+}
+
+model PracticeTestAttempt {
+  id                    String                @id @default(uuid())
+  userId                String
+  user                  User                  @relation(fields: [userId], references: [id])
+  testId                String
+  test                  GeneratedPracticeTest @relation(fields: [testId], references: [id])
+  answers               Json                  // User's answers
+  score                 Int
+  timeSpent            Int                   // in seconds
+  completedAt          DateTime
+  createdAt            DateTime              @default(now())
+}
+
+enum UserRole {
+  STUDENT
+  PARENT
+  TUTOR
+  ADMIN
+}

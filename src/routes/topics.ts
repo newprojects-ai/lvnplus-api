@@ -11,6 +11,25 @@ const router = Router();
  * @swagger
  * components:
  *   schemas:
+ *     Subtopic:
+ *       type: object
+ *       properties:
+ *         subtopic_id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *         topic_id:
+ *           type: string
+ *           format: uuid
+ *         valid_from:
+ *           type: string
+ *           format: date-time
+ *         valid_to:
+ *           type: string
+ *           format: date-time
  *     Topic:
  *       type: object
  *       properties:

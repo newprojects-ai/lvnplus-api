@@ -7,6 +7,35 @@ import { users_role } from '@prisma/client';
 
 const router = Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Subject:
+ *       type: object
+ *       properties:
+ *         subject_id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *         topics:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Topic'
+ *     SubjectRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *       properties:
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ */
+
 const SubjectSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional()

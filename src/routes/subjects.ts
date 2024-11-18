@@ -7,43 +7,9 @@ import { users_role } from '@prisma/client';
 
 const router = Router();
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     Subject:
- *       type: object
- *       properties:
- *         subject_id:
- *           type: string
- *           format: uuid
- *         name:
- *           type: string
- *         description:
- *           type: string
- *         exam_id:
- *           type: string
- *           format: uuid
- *         topics:
- *           type: array
- *           items:
- *             $ref: '#/components/schemas/Topic'
- *     SubjectRequest:
- *       type: object
- *       required:
- *         - name
- *         - examId
- *       properties:
- *         name:
- *           type: string
- *         examId:
- *           type: string
- *           format: uuid
- */
-
 const SubjectSchema = z.object({
   name: z.string().min(1).max(100),
-  examId: z.string().uuid()
+  description: z.string().optional()
 });
 
 /**
@@ -163,7 +129,7 @@ router.post('/',
         data: {
           subject_id: req.body.id,
           name: req.body.name,
-          exam_id: req.body.examId
+          description: req.body.description
         },
         include: {
           topics: true
@@ -218,7 +184,7 @@ router.put('/:id',
         where: { subject_id: req.params.id },
         data: {
           name: req.body.name,
-          exam_id: req.body.examId
+          description: req.body.description
         },
         include: {
           topics: true

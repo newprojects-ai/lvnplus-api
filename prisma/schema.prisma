@@ -24,8 +24,125 @@ model exams {
   updated_at               DateTime?                  @default(now()) @db.Timestamp(0)
   generated_practice_tests generated_practice_tests[]
   tests                    tests[]
+}
 
-  subjects subjects[] // Relation to the subjects model
+model subjects {
+  subject_id  String      @id @db.Char(36)
+  name        String      @unique(map: "name") @db.VarChar(100)
+  description String?     @db.Text
+  created_at  DateTime?   @default(now()) @db.Timestamp(0)
+  updated_at  DateTime?   @default(now()) @db.Timestamp(0)
+  questions   questions[]
+  tests       tests[]
+  topics      topics[]
+}
+
+model topics {
+  topic_id                String                    @id @db.Char(36)
+  subject_id              String                    @db.Char(36)
+  name                    String                    @unique(map: "name") @db.VarChar(100)
+  description             String?                   @db.Text
+  valid_from              DateTime                  @db.Date
+  valid_to                DateTime?                 @db.Date
+  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  practice_test_subtopics practice_test_subtopics[]
+  practice_test_topics    practice_test_topics[]
+  questions               questions[]
+  subtopics               subtopics[]
+  tests                   tests[]
+  subjects                subjects                  @relation(fields: [subject_id], references: [subject_id], onUpdate: Restrict, map: "topics_ibfk_1")
+
+  @@index([valid_from, valid_to], map: "idx_validity_topics")
+  @@index([subject_id], map: "subject_id")
+}
+
+model subtopics {
+  subtopic_id             String                    @id @db.Char(36)
+  topic_id                String                    @db.Char(36)
+  name                    String                    @unique(map: "name") @db.VarChar(100)
+  description             String?                   @db.Text
+  valid_from              DateTime                  @db.Date
+  valid_to                DateTime?                 @db.Date
+  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  practice_test_subtopics practice_test_subtopics[]
+  questions               questions[]
+  topics                  topics                    @relation(fields: [topic_id], references: [topic_id], onUpdate: Restrict, map: "subtopics_ibfk_1")
+  tests                   tests[]
+
+  @@index([valid_from, valid_to], map: "idx_validity_subtopics")
+  @@index([topic_id], map: "topic_id")
+}
+
+model questions {
+  question_id             String                    @id @db.Char(36)
+  test_id                 String?                   @db.Char(36)
+  subject_id              String                    @db.Char(36)
+  topic_id                String?                   @db.Char(36)
+  subtopic_id             String?                   @db.Char(36)
+  question_text           String                    @db.Text
+  options                 String                    @db.LongText
+  correct_answer          String?                   @db.VarChar(255)
+  difficulty_id           Int?
+  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  practice_test_questions practice_test_questions[]
+  tests                   tests?                    @relation(fields: [test_id], references: [test_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_1")
+  subjects                subjects                  @relation(fields: [subject_id], references: [subject_id], onUpdate: Restrict, map: "questions_ibfk_2")
+  topics                  topics?                   @relation(fields: [topic_id], references: [topic_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_3")
+  subtopics               subtopics?                @relation(fields: [subtopic_id], references: [subtopic_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_4")
+  difficulty_levels       difficulty_levels?        @relation(fields: [difficulty_id], references: [difficulty_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_5")
+
+  @@index([difficulty_id], map: "difficulty_id")
+  @@index([subject_id], map: "subject_id")
+  @@index([subtopic_id], map: "subtopic_id")
+  @@index([test_id], map: "test_id")
+  @@index([topic_id], map: "topic_id")
+}
+
+model tests {
+  test_id     String      @id @db.Char(36)
+  exam_id     String?     @db.Char(36)
+  subject_id  String      @db.Char(36)
+  topic_id    String?     @db.Char(36)
+  subtopic_id String?     @db.Char(36)
+  title       String      @db.VarChar(150)
+  description String?     @db.Text
+  created_by  String      @db.Char(36)
+  created_at  DateTime?   @default(now()) @db.Timestamp(0)
+  updated_at  DateTime?   @default(now()) @db.Timestamp(0)
+  questions   questions[]
+  exams       exams?      @relation(fields: [exam_id], references: [exam_id], onDelete: Restrict, onUpdate: Restrict, map: "tests_ibfk_1")
+  subjects    subjects    @relation(fields: [subject_id], references: [subject_id], onUpdate: Restrict, map: "tests_ibfk_2")
+  topics      topics?     @relation(fields: [topic_id], references: [topic_id], onDelete: Restrict, onUpdate: Restrict, map: "tests_ibfk_3")
+  subtopics   subtopics?  @relation(fields: [subtopic_id], references: [subtopic_id], onDelete: Restrict, onUpdate: Restrict, map: "tests_ibfk_4")
+  users       users       @relation(fields: [created_by], references: [user_id], onUpdate: Restrict, map: "tests_ibfk_5")
+
+  @@index([created_by], map: "created_by")
+  @@index([exam_id], map: "exam_id")
+  @@index([subject_id], map: "subject_id")
+  @@index([subtopic_id], map: "subtopic_id")
+  @@index([topic_id], map: "topic_id")
+}
+
+model users {
+  user_id                      String                         @id @default(uuid()) @db.Char(36)
+  name                         String                         @db.VarChar(100)
+  email                        String                         @unique(map: "email") @db.VarChar(150)
+  password                     String                         @db.VarChar(255)
+  role                         users_role
+  parent_id                    String?                        @db.Char(36)
+  created_at                   DateTime?                      @default(now()) @db.Timestamp(0)
+  updated_at                   DateTime?                      @default(now()) @db.Timestamp(0)
+  generated_practice_tests     generated_practice_tests[]
+  practice_test_configurations practice_test_configurations[]
+  tests                        tests[]
+  users                        users?                         @relation("usersTousers", fields: [parent_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "users_ibfk_1")
+  other_users                  users[]                        @relation("usersTousers")
+
+  @@index([role], map: "idx_user_role")
+  @@index([parent_id], map: "parent_id")
 }
 
 model generated_practice_tests {
@@ -94,128 +211,6 @@ model practice_test_topics {
 
   @@id([config_id, topic_id])
   @@index([topic_id], map: "topic_id")
-}
-
-model questions {
-  question_id             String                    @id @db.Char(36)
-  test_id                 String?                   @db.Char(36)
-  subject_id              String                    @db.Char(36)
-  topic_id                String?                   @db.Char(36)
-  subtopic_id             String?                   @db.Char(36)
-  question_text           String                    @db.Text
-  options                 String                    @db.LongText
-  correct_answer          String?                   @db.VarChar(255)
-  difficulty_id           Int?
-  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
-  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
-  practice_test_questions practice_test_questions[]
-  tests                   tests?                    @relation(fields: [test_id], references: [test_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_1")
-  subjects                subjects                  @relation(fields: [subject_id], references: [subject_id], onUpdate: Restrict, map: "questions_ibfk_2")
-  topics                  topics?                   @relation(fields: [topic_id], references: [topic_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_3")
-  subtopics               subtopics?                @relation(fields: [subtopic_id], references: [subtopic_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_4")
-  difficulty_levels       difficulty_levels?        @relation(fields: [difficulty_id], references: [difficulty_id], onDelete: Restrict, onUpdate: Restrict, map: "questions_ibfk_5")
-
-  @@index([difficulty_id], map: "difficulty_id")
-  @@index([subject_id], map: "subject_id")
-  @@index([subtopic_id], map: "subtopic_id")
-  @@index([test_id], map: "test_id")
-  @@index([topic_id], map: "topic_id")
-}
-
-model subjects {
-  subject_id  String      @id @db.Char(36)
-  name        String      @unique(map: "name") @db.VarChar(100)
-  description String?     @db.Text
-  created_at  DateTime?   @default(now()) @db.Timestamp(0)
-  updated_at  DateTime?   @default(now()) @db.Timestamp(0)
-  questions   questions[]
-  tests       tests[]
-  topics      topics[]
-
-  exam_id String?
-  exam    exams?  @relation(fields: [exam_id], references: [exam_id]) // Relation back to exams
-}
-
-model subtopics {
-  subtopic_id             String                    @id @db.Char(36)
-  topic_id                String                    @db.Char(36)
-  name                    String                    @unique(map: "name") @db.VarChar(100)
-  description             String?                   @db.Text
-  valid_from              DateTime                  @db.Date
-  valid_to                DateTime?                 @db.Date
-  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
-  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
-  practice_test_subtopics practice_test_subtopics[]
-  questions               questions[]
-  topics                  topics                    @relation(fields: [topic_id], references: [topic_id], onUpdate: Restrict, map: "subtopics_ibfk_1")
-  tests                   tests[]
-
-  @@index([valid_from, valid_to], map: "idx_validity_subtopics")
-  @@index([topic_id], map: "topic_id")
-}
-
-model tests {
-  test_id     String      @id @db.Char(36)
-  exam_id     String?     @db.Char(36)
-  subject_id  String      @db.Char(36)
-  topic_id    String?     @db.Char(36)
-  subtopic_id String?     @db.Char(36)
-  title       String      @db.VarChar(150)
-  description String?     @db.Text
-  created_by  String      @db.Char(36)
-  created_at  DateTime?   @default(now()) @db.Timestamp(0)
-  updated_at  DateTime?   @default(now()) @db.Timestamp(0)
-  questions   questions[]
-  exams       exams?      @relation(fields: [exam_id], references: [exam_id], onDelete: Restrict, onUpdate: Restrict, map: "tests_ibfk_1")
-  subjects    subjects    @relation(fields: [subject_id], references: [subject_id], onUpdate: Restrict, map: "tests_ibfk_2")
-  topics      topics?     @relation(fields: [topic_id], references: [topic_id], onDelete: Restrict, onUpdate: Restrict, map: "tests_ibfk_3")
-  subtopics   subtopics?  @relation(fields: [subtopic_id], references: [subtopic_id], onDelete: Restrict, onUpdate: Restrict, map: "tests_ibfk_4")
-  users       users       @relation(fields: [created_by], references: [user_id], onUpdate: Restrict, map: "tests_ibfk_5")
-
-  @@index([created_by], map: "created_by")
-  @@index([exam_id], map: "exam_id")
-  @@index([subject_id], map: "subject_id")
-  @@index([subtopic_id], map: "subtopic_id")
-  @@index([topic_id], map: "topic_id")
-}
-
-model topics {
-  topic_id                String                    @id @db.Char(36)
-  subject_id              String                    @db.Char(36)
-  name                    String                    @unique(map: "name") @db.VarChar(100)
-  description             String?                   @db.Text
-  valid_from              DateTime                  @db.Date
-  valid_to                DateTime?                 @db.Date
-  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
-  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
-  practice_test_subtopics practice_test_subtopics[]
-  practice_test_topics    practice_test_topics[]
-  questions               questions[]
-  subtopics               subtopics[]
-  tests                   tests[]
-  subjects                subjects                  @relation(fields: [subject_id], references: [subject_id], onUpdate: Restrict, map: "topics_ibfk_1")
-
-  @@index([valid_from, valid_to], map: "idx_validity_topics")
-  @@index([subject_id], map: "subject_id")
-}
-
-model users {
-  user_id                      String                         @id @default(uuid()) @db.Char(36) // Add @default(uuid())
-  name                         String                         @db.VarChar(100)
-  email                        String                         @unique(map: "email") @db.VarChar(150)
-  password                     String                         @db.VarChar(255)
-  role                         users_role
-  parent_id                    String?                        @db.Char(36)
-  created_at                   DateTime?                      @default(now()) @db.Timestamp(0)
-  updated_at                   DateTime?                      @default(now()) @db.Timestamp(0)
-  generated_practice_tests     generated_practice_tests[]
-  practice_test_configurations practice_test_configurations[]
-  tests                        tests[]
-  users                        users?                         @relation("usersTousers", fields: [parent_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "users_ibfk_1")
-  other_users                  users[]                        @relation("usersTousers")
-
-  @@index([role], map: "idx_user_role")
-  @@index([parent_id], map: "parent_id")
 }
 
 enum practice_test_configurations_test_type {

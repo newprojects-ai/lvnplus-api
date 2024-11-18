@@ -118,15 +118,20 @@ router.get('/random/practice', authenticate, async (req, res, next) => {
   try {
     const count = parseInt(req.query.count as string) || 10;
     const difficultyId = parseInt(req.query.difficultyId as string);
-    const subtopicIds = (req.query.subtopicIds as string).split(',');
+    const subtopicIds = req.query.subtopicIds ? (req.query.subtopicIds as string).split(',') : [];
+
+    const whereClause: Prisma.questionsWhereInput = {};
+
+    if (difficultyId) {
+      whereClause.difficulty_id = difficultyId;
+    }
+
+    if (subtopicIds.length > 0) {
+      whereClause.subtopic_id = { in: subtopicIds };
+    }
 
     const questions = await prisma.questions.findMany({
-      where: {
-        AND: [
-          { difficulty_id: difficultyId },
-          { subtopic_id: { in: subtopicIds } }
-        ]
-      },
+      where: whereClause,
       take: count,
       orderBy: {
         created_at: 'desc'
@@ -220,6 +225,7 @@ router.get('/', authenticate, async (req, res, next) => {
     } = await PaginationSchema.parseAsync(req.query);
 
     const skip = (page - 1) * limit;
+
     const where: Prisma.questionsWhereInput = {};
 
     if (difficulty) {
@@ -243,6 +249,7 @@ router.get('/', authenticate, async (req, res, next) => {
     }
 
     const total = await prisma.questions.count({ where });
+
     const questions = await prisma.questions.findMany({
       where,
       include: {

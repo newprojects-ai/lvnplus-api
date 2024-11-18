@@ -1,0 +1,134 @@
+### Authentication
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test Admin",
+  "email": "admin@test.com",
+  "password": "password123",
+  "role": "Admin"
+}
+
+###
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@test.com",
+  "password": "password123"
+}
+
+### Exams
+# Save the auth token from login response
+@authToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZiMDNhNTNjLTg0ZjYtNDUzZi1iMjMyLWVlMWI4YzYwZWU2OSIsInJvbGUiOiJBZG1pbiIsImlhdCI6MTczMTg3NzI0OCwiZXhwIjoxNzMxOTYzNjQ4fQ.S4ViqA2NCGbhxAfyvPJEXqxBj6U8KGpx7E6Ccrl6jHo"
+
+### Create Exam
+POST http://localhost:3000/api/exams
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "11+ Exam",
+  "description": "Standard 11+ examination"
+}
+
+### Get All Exams
+GET http://localhost:3000/api/exams
+Authorization: Bearer {{authToken}}
+
+### Subjects
+### Create Subject
+POST http://localhost:3000/api/subjects
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Mathematics",
+  "examId": "exam_id_from_previous_response"
+}
+
+### Get All Subjects
+GET http://localhost:3000/api/subjects
+Authorization: Bearer {{authToken}}
+
+### Topics
+### Create Topic
+POST http://localhost:3000/api/topics
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Algebra",
+  "subjectId": "subject_id_from_previous_response",
+  "description": "Basic algebraic concepts",
+  "validFrom": "2024-01-01T00:00:00Z",
+  "validTo": "2025-01-01T00:00:00Z"
+}
+
+### Get Topics by Subject
+GET http://localhost:3000/api/topics/subject/subject_id_here
+Authorization: Bearer {{authToken}}
+
+### Questions
+### Create Question
+POST http://localhost:3000/api/questions
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "questionText": "Solve for x: 2x + 3 = 7",
+  "options": ["x = 2", "x = 3", "x = 4", "x = 5"],
+  "correctAnswer": "x = 2",
+  "subtopicId": "subtopic_id_here",
+  "difficultyId": 1,
+  "subjectId": "subject_id_here"
+}
+
+### Get Questions with Filters
+GET http://localhost:3000/api/questions?difficulty=1&subtopicId=subtopic_id_here&page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### Practice Tests
+### Create Test Configuration
+POST http://localhost:3000/api/practice-tests/configurations
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Algebra Practice",
+  "topicIds": ["topic_id_here"],
+  "subtopicIds": ["subtopic_id_here"],
+  "difficultyLevels": [1, 2],
+  "questionCount": 10,
+  "timeLimit": 30
+}
+
+### Generate Test
+POST http://localhost:3000/api/practice-tests/generate/config_id_here
+Authorization: Bearer {{authToken}}
+
+### Submit Test
+POST http://localhost:3000/api/practice-tests/test/test_id_here/submit
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "answers": {
+    "question_id_1": "selected_answer_1",
+    "question_id_2": "selected_answer_2"
+  },
+  "timeSpent": 1500
+}
+
+### Analytics
+### Get Student Performance
+GET http://localhost:3000/api/analytics/student/student_id_here
+Authorization: Bearer {{authToken}}
+
+### Get Group Performance
+GET http://localhost:3000/api/analytics/group/group_id_here
+Authorization: Bearer {{authToken}}
+
+### Get Improvement Suggestions
+GET http://localhost:3000/api/analytics/suggestions/student_id_here
+Authorization: Bearer {{authToken}}

@@ -7,6 +7,55 @@ import { users_role } from '@prisma/client';
 
 const router = Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Topic:
+ *       type: object
+ *       properties:
+ *         topic_id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *         subject_id:
+ *           type: string
+ *           format: uuid
+ *         valid_from:
+ *           type: string
+ *           format: date-time
+ *         valid_to:
+ *           type: string
+ *           format: date-time
+ *         subtopics:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Subtopic'
+ *     TopicRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *         - subjectId
+ *         - validFrom
+ *       properties:
+ *         name:
+ *           type: string
+ *         subjectId:
+ *           type: string
+ *           format: uuid
+ *         description:
+ *           type: string
+ *         validFrom:
+ *           type: string
+ *           format: date-time
+ *         validTo:
+ *           type: string
+ *           format: date-time
+ */
+
 const TopicSchema = z.object({
   name: z.string().min(1).max(100),
   subjectId: z.string().uuid(),
@@ -15,7 +64,24 @@ const TopicSchema = z.object({
   validTo: z.date().optional()
 });
 
-// Get all topics with subtopics
+/**
+ * @swagger
+ * /api/topics:
+ *   get:
+ *     tags: [Topics]
+ *     summary: Get all topics
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of topics with subtopics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Topic'
+ */
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const topics = await prisma.topics.findMany({
@@ -29,7 +95,31 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
-// Get topics by subject ID
+/**
+ * @swagger
+ * /api/topics/subject/{subjectId}:
+ *   get:
+ *     tags: [Topics]
+ *     summary: Get topics by subject ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: subjectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: List of topics for the subject
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Topic'
+ */
 router.get('/subject/:subjectId', authenticate, async (req, res, next) => {
   try {
     const topics = await prisma.topics.findMany({
@@ -44,7 +134,30 @@ router.get('/subject/:subjectId', authenticate, async (req, res, next) => {
   }
 });
 
-// Create topic
+/**
+ * @swagger
+ * /api/topics:
+ *   post:
+ *     tags: [Topics]
+ *     summary: Create a new topic
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/TopicRequest'
+ *     responses:
+ *       201:
+ *         description: Topic created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Topic'
+ *       403:
+ *         description: Insufficient permissions
+ */
 router.post('/',
   authenticate,
   authorize([users_role.Admin, users_role.Tutor]),
@@ -70,7 +183,39 @@ router.post('/',
     }
 });
 
-// Update topic
+/**
+ * @swagger
+ * /api/topics/{id}:
+ *   put:
+ *     tags: [Topics]
+ *     summary: Update a topic
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/TopicRequest'
+ *     responses:
+ *       200:
+ *         description: Topic updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Topic'
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Topic not found
+ */
 router.put('/:id',
   authenticate,
   authorize([users_role.Admin, users_role.Tutor]),
@@ -96,7 +241,29 @@ router.put('/:id',
     }
 });
 
-// Delete topic
+/**
+ * @swagger
+ * /api/topics/{id}:
+ *   delete:
+ *     tags: [Topics]
+ *     summary: Delete a topic
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: Topic deleted successfully
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Topic not found
+ */
 router.delete('/:id',
   authenticate,
   authorize([users_role.Admin]),

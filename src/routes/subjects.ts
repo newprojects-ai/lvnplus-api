@@ -7,12 +7,63 @@ import { users_role } from '@prisma/client';
 
 const router = Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Subject:
+ *       type: object
+ *       properties:
+ *         subject_id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *         exam_id:
+ *           type: string
+ *           format: uuid
+ *         topics:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Topic'
+ *     SubjectRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *         - examId
+ *       properties:
+ *         name:
+ *           type: string
+ *         examId:
+ *           type: string
+ *           format: uuid
+ */
+
 const SubjectSchema = z.object({
   name: z.string().min(1).max(100),
   examId: z.string().uuid()
 });
 
-// Get all subjects with topics and subtopics
+/**
+ * @swagger
+ * /api/subjects:
+ *   get:
+ *     tags: [Subjects]
+ *     summary: Get all subjects
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of subjects with topics and subtopics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Subject'
+ */
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const subjects = await prisma.subjects.findMany({
@@ -30,7 +81,31 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
-// Get subject by ID
+/**
+ * @swagger
+ * /api/subjects/{id}:
+ *   get:
+ *     tags: [Subjects]
+ *     summary: Get subject by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Subject details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subject'
+ *       404:
+ *         description: Subject not found
+ */
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
     const subject = await prisma.subjects.findUnique({
@@ -54,7 +129,30 @@ router.get('/:id', authenticate, async (req, res, next) => {
   }
 });
 
-// Create subject (Admin/Tutor only)
+/**
+ * @swagger
+ * /api/subjects:
+ *   post:
+ *     tags: [Subjects]
+ *     summary: Create a new subject
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SubjectRequest'
+ *     responses:
+ *       201:
+ *         description: Subject created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subject'
+ *       403:
+ *         description: Insufficient permissions
+ */
 router.post('/', 
   authenticate, 
   authorize([users_role.Admin, users_role.Tutor]),
@@ -77,7 +175,39 @@ router.post('/',
     }
 });
 
-// Update subject
+/**
+ * @swagger
+ * /api/subjects/{id}:
+ *   put:
+ *     tags: [Subjects]
+ *     summary: Update a subject
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SubjectRequest'
+ *     responses:
+ *       200:
+ *         description: Subject updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subject'
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Subject not found
+ */
 router.put('/:id',
   authenticate,
   authorize([users_role.Admin, users_role.Tutor]),
@@ -100,7 +230,29 @@ router.put('/:id',
     }
 });
 
-// Delete subject
+/**
+ * @swagger
+ * /api/subjects/{id}:
+ *   delete:
+ *     tags: [Subjects]
+ *     summary: Delete a subject
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: Subject deleted successfully
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Subject not found
+ */
 router.delete('/:id',
   authenticate,
   authorize([users_role.Admin]),

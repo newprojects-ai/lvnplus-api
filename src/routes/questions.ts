@@ -8,6 +8,60 @@ import { randomUUID } from 'crypto';
 
 const router = Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Question:
+ *       type: object
+ *       properties:
+ *         question_id:
+ *           type: string
+ *           format: uuid
+ *         question_text:
+ *           type: string
+ *         options:
+ *           type: array
+ *           items:
+ *             type: string
+ *         correct_answer:
+ *           type: string
+ *         subtopic_id:
+ *           type: string
+ *           format: uuid
+ *         difficulty_id:
+ *           type: integer
+ *         subject_id:
+ *           type: string
+ *           format: uuid
+ *     QuestionRequest:
+ *       type: object
+ *       required:
+ *         - questionText
+ *         - options
+ *         - correctAnswer
+ *         - subtopicId
+ *         - difficultyId
+ *         - subjectId
+ *       properties:
+ *         questionText:
+ *           type: string
+ *         options:
+ *           type: array
+ *           items:
+ *             type: string
+ *         correctAnswer:
+ *           type: string
+ *         subtopicId:
+ *           type: string
+ *           format: uuid
+ *         difficultyId:
+ *           type: integer
+ *         subjectId:
+ *           type: string
+ *           format: uuid
+ */
+
 const QuestionSchema = z.object({
   questionText: z.string().min(1),
   options: z.array(z.string()).min(2),
@@ -27,7 +81,39 @@ const PaginationSchema = z.object({
   search: z.string().optional()
 });
 
-// Get random questions for practice tests
+/**
+ * @swagger
+ * /api/questions/random/practice:
+ *   get:
+ *     tags: [Questions]
+ *     summary: Get random questions for practice
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: count
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: difficultyId
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: subtopicIds
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of subtopic IDs
+ *     responses:
+ *       200:
+ *         description: List of random questions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Question'
+ */
 router.get('/random/practice', authenticate, async (req, res, next) => {
   try {
     const count = parseInt(req.query.count as string) || 10;
@@ -47,7 +133,6 @@ router.get('/random/practice', authenticate, async (req, res, next) => {
       }
     });
 
-    // Shuffle the questions array
     const shuffledQuestions = [...questions]
       .map((q) => ({ q, sort: Math.random() }))
       .sort((a, b) => a.sort - b.sort)
@@ -59,7 +144,69 @@ router.get('/random/practice', authenticate, async (req, res, next) => {
   }
 });
 
-// Get questions with pagination and filters
+/**
+ * @swagger
+ * /api/questions:
+ *   get:
+ *     tags: [Questions]
+ *     summary: Get questions with pagination and filters
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: subtopicId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: topicId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: subjectId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Paginated list of questions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Question'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                     currentPage:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ */
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const { 
@@ -73,8 +220,6 @@ router.get('/', authenticate, async (req, res, next) => {
     } = await PaginationSchema.parseAsync(req.query);
 
     const skip = (page - 1) * limit;
-
-    // Build where clause based on filters
     const where: Prisma.questionsWhereInput = {};
 
     if (difficulty) {
@@ -97,10 +242,7 @@ router.get('/', authenticate, async (req, res, next) => {
       where.question_text = { contains: search };
     }
 
-    // Get total count for pagination
     const total = await prisma.questions.count({ where });
-
-    // Get questions
     const questions = await prisma.questions.findMany({
       where,
       include: {
@@ -134,7 +276,31 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
-// Get question by ID
+/**
+ * @swagger
+ * /api/questions/{id}:
+ *   get:
+ *     tags: [Questions]
+ *     summary: Get question by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Question details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Question'
+ *       404:
+ *         description: Question not found
+ */
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
     const question = await prisma.questions.findUnique({
@@ -163,7 +329,30 @@ router.get('/:id', authenticate, async (req, res, next) => {
   }
 });
 
-// Create question
+/**
+ * @swagger
+ * /api/questions:
+ *   post:
+ *     tags: [Questions]
+ *     summary: Create a new question
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/QuestionRequest'
+ *     responses:
+ *       201:
+ *         description: Question created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Question'
+ *       403:
+ *         description: Insufficient permissions
+ */
 router.post('/',
   authenticate,
   authorize([users_role.Admin, users_role.Tutor]),
@@ -205,7 +394,39 @@ router.post('/',
     }
 });
 
-// Update question
+/**
+ * @swagger
+ * /api/questions/{id}:
+ *   put:
+ *     tags: [Questions]
+ *     summary: Update a question
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/QuestionRequest'
+ *     responses:
+ *       200:
+ *         description: Question updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Question'
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Question not found
+ */
 router.put('/:id',
   authenticate,
   authorize([users_role.Admin, users_role.Tutor]),
@@ -246,7 +467,29 @@ router.put('/:id',
     }
 });
 
-// Delete question
+/**
+ * @swagger
+ * /api/questions/{id}:
+ *   delete:
+ *     tags: [Questions]
+ *     summary: Delete a question
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: Question deleted successfully
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: Question not found
+ */
 router.delete('/:id',
   authenticate,
   authorize([users_role.Admin]),

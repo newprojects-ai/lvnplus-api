@@ -9,12 +9,58 @@ import { Router } from 'express';
 
 const router = Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Exam:
+ *       type: object
+ *       properties:
+ *         exam_id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *         subjects:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Subject'
+ *     ExamRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *       properties:
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ */
+
 const ExamSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional()
 });
 
-// Get all exams
+/**
+ * @swagger
+ * /api/exams:
+ *   get:
+ *     tags: [Exams]
+ *     summary: Get all exams
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of exams
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Exam'
+ */
 router.get('/', 
   authenticate as any,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -38,7 +84,30 @@ router.get('/',
     }
 });
 
-// Create exam (Admin only)
+/**
+ * @swagger
+ * /api/exams:
+ *   post:
+ *     tags: [Exams]
+ *     summary: Create a new exam
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ExamRequest'
+ *     responses:
+ *       201:
+ *         description: Exam created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Exam'
+ *       403:
+ *         description: Insufficient permissions
+ */
 router.post('/', 
   authenticate as any,
   authorize([UserRole.Admin]) as any,

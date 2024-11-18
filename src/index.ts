@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
+import { specs } from './config/swagger';
 import { authRouter } from './routes/auth';
 import { examsRouter } from './routes/exams';
 import { subjectsRouter } from './routes/subjects';
@@ -21,6 +23,9 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
 // Routes
 app.use('/api/auth', authRouter);
 app.use('/api/exams', examsRouter);
@@ -36,4 +41,5 @@ app.use(errorHandler);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  console.log(`API Documentation available at http://localhost:${port}/api-docs`);
 });
